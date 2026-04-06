@@ -1,17 +1,62 @@
-# bloom_focus
+# 🌱 Bloom Focus
 
-A new Flutter project.
+Bloom Focus is a nature-inspired productivity app that combines Pomodoro focus sessions with a plant growth system.
 
-## Getting Started
+Stay focused, grow your plant, and build better habits.
 
-This project is a starting point for a Flutter application.
+---
 
-A few resources to get you started if this is your first Flutter project:
+## ✨ Features
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- ⏱️ Focus Timer (Pomodoro)
+- 🌿 Plant Growth System (water → growth)
+- 📅 Task Planning
+- 📊 Progress Tracking
+- 🎧 Ambient Sounds (coming soon)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+
+## 🧠 Concept
+
+Bloom Focus is built around a simple loop:
+
+Focus → Earn Water → Grow Your Plant
+
+The goal is to make productivity feel alive, rewarding, and emotionally engaging.
+
+---
+
+## 📱 Screens
+
+- Focus Screen (Timer)
+- Plant Growth Screen
+- Task Planner
+- Progress Dashboard
+- Settings
+
+---
+
+## 🛠 Tech Stack
+
+- Flutter
+- Riverpod (state management)
+- Hive (local storage)
+- Go Router (navigation)
+
+---
+
+## 🚧 Status
+
+Currently in development (MVP stage)
+
+---
+
+## 🎯 Goal
+
+To create a calm, beautiful, and habit-forming productivity app that users actually enjoy using every day.
+
+---
+
+## 👤 Author
+
+Alper Gedik
