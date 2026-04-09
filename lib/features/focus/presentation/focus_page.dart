@@ -283,7 +283,7 @@ class _FocusPageState extends State<FocusPage>
               Text(
                 greeting,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: AppTheme.primary.withOpacity(0.75),
+                  color: AppTheme.primary.withValues(alpha: 0.75),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -313,11 +313,11 @@ class _FocusPageState extends State<FocusPage>
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.65),
+              color: Colors.white.withValues(alpha: 0.65),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -325,7 +325,7 @@ class _FocusPageState extends State<FocusPage>
             ),
             child: Icon(
               Icons.settings_rounded,
-              color: AppTheme.primary.withOpacity(0.85),
+              color: AppTheme.primary.withValues(alpha: 0.85),
               size: 22,
             ),
           ),
@@ -373,7 +373,7 @@ class _FocusPageState extends State<FocusPage>
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.58),
+        color: Colors.white.withValues(alpha: 0.58),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
@@ -398,7 +398,7 @@ class _FocusPageState extends State<FocusPage>
                   boxShadow: selected
                       ? [
                           BoxShadow(
-                            color: AppTheme.darkGreen.withOpacity(0.18),
+                            color: AppTheme.darkGreen.withValues(alpha: 0.18),
                             blurRadius: 12,
                             offset: const Offset(0, 5),
                           ),
@@ -413,7 +413,7 @@ class _FocusPageState extends State<FocusPage>
                     fontWeight: FontWeight.w700,
                     color: selected
                         ? Colors.white
-                        : AppTheme.primary.withOpacity(0.85),
+                        : AppTheme.primary.withValues(alpha: 0.85),
                   ),
                 ),
               ),
@@ -447,7 +447,7 @@ class _FocusPageState extends State<FocusPage>
                       child: CircularProgressIndicator(
                         value: value,
                         strokeWidth: 9,
-                        backgroundColor: Colors.white.withOpacity(0.42),
+                        backgroundColor: Colors.white.withValues(alpha: 0.42),
                         valueColor: AlwaysStoppedAnimation<Color>(
                           selectedMode == 0
                               ? AppTheme.darkGreen
@@ -462,9 +462,9 @@ class _FocusPageState extends State<FocusPage>
                   height: 250,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.44),
+                    color: Colors.white.withValues(alpha: 0.44),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.55),
+                      color: Colors.white.withValues(alpha: 0.55),
                       width: 7,
                     ),
                   ),
@@ -474,7 +474,7 @@ class _FocusPageState extends State<FocusPage>
                       Text(
                         modeLabel,
                         style: theme.textTheme.labelLarge?.copyWith(
-                          color: AppTheme.primary.withOpacity(0.9),
+                          color: AppTheme.primary.withValues(alpha: 0.9),
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1.2,
                         ),
@@ -513,7 +513,7 @@ class _FocusPageState extends State<FocusPage>
                                 ? "Quick reset"
                                 : "Deep reset",
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.primary.withOpacity(0.72),
+                          color: AppTheme.primary.withValues(alpha: 0.72),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -540,7 +540,7 @@ class _FocusPageState extends State<FocusPage>
           key: ValueKey("${selectedMode}_$isRunning"),
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyLarge?.copyWith(
-            color: AppTheme.primary.withOpacity(0.88),
+            color: AppTheme.primary.withValues(alpha: 0.88),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -556,11 +556,11 @@ class _FocusPageState extends State<FocusPage>
           width: 58,
           height: 58,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.68),
+            color: Colors.white.withValues(alpha: 0.68),
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 12,
                 offset: const Offset(0, 5),
               ),
@@ -569,7 +569,7 @@ class _FocusPageState extends State<FocusPage>
           child: IconButton(
             onPressed: resetTimer,
             icon: const Icon(Icons.refresh_rounded),
-            color: AppTheme.primary.withOpacity(0.85),
+            color: AppTheme.primary.withValues(alpha: 0.85),
             iconSize: 26,
           ),
         ),
@@ -584,7 +584,7 @@ class _FocusPageState extends State<FocusPage>
                 color: (isRunning
                         ? const Color(0xFFE06A6A)
                         : AppTheme.darkGreen)
-                    .withOpacity(0.22),
+                    .withValues(alpha: 0.22),
                 blurRadius: 16,
                 offset: const Offset(0, 8),
               ),
@@ -661,11 +661,11 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.58),
+        color: Colors.white.withValues(alpha: 0.58),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.025),
+            color: Colors.black.withValues(alpha: 0.025),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -680,7 +680,7 @@ class _StatCard extends StatelessWidget {
             title,
             style: TextStyle(
               fontSize: 14,
-              color: AppTheme.primary.withOpacity(0.72),
+              color: AppTheme.primary.withValues(alpha: 0.72),
               fontWeight: FontWeight.w500,
             ),
           ),
