@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/state/app_state.dart';
 import '../../settings/presentation/settings_page.dart';
@@ -12,11 +13,10 @@ class FocusPage extends StatefulWidget {
 }
 
 class _FocusPageState extends State<FocusPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   Timer? timer;
   bool isRunning = false;
-  int selectedMode = 0; // 0 Focus, 1 Short Break, 2 Long Break
-
+  int selectedMode = 0;
   late int remainingSeconds;
 
   late final AnimationController _pulseController;
@@ -26,20 +26,24 @@ class _FocusPageState extends State<FocusPage>
   late final Animation<double> _fadeAnimation;
   late final Animation<Offset> _slideAnimation;
 
-  int get currentModeMinutes {
+  bool _hydratedFromState = false;
+
+  int _currentModeMinutes(BloomAppState appState) {
     switch (selectedMode) {
       case 1:
-        return AppState.shortBreakMinutes;
+        return appState.shortBreakMinutes;
       case 2:
-        return AppState.longBreakMinutes;
+        return appState.longBreakMinutes;
       default:
-        return AppState.focusMinutes;
+        return appState.focusMinutes;
     }
   }
 
-  int get totalSeconds => currentModeMinutes * 60;
+  int _totalSeconds(BloomAppState appState) =>
+      _currentModeMinutes(appState) * 60;
 
-  double get progress {
+  double _progress(BloomAppState appState) {
+    final totalSeconds = _totalSeconds(appState);
     if (totalSeconds == 0) return 0;
     return (totalSeconds - remainingSeconds) / totalSeconds;
   }
@@ -47,8 +51,9 @@ class _FocusPageState extends State<FocusPage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
-    remainingSeconds = AppState.focusMinutes * 60;
+    remainingSeconds = BloomAppState.focusMinutesDefault * 60;
 
     _pulseController = AnimationController(
       vsync: this,
@@ -88,98 +93,264 @@ class _FocusPageState extends State<FocusPage>
     _entryController.forward();
   }
 
-  void applySelectedMode() {
-    timer?.cancel();
-    _pulseController.stop();
-    _pulseController.reset();
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
 
-    setState(() {
-      isRunning = false;
-      remainingSeconds = currentModeMinutes * 60;
-    });
+    if (_hydratedFromState) return;
+
+    final appState = context.read<BloomAppState>();
+    selectedMode = appState.selectedFocusMode;
+    remainingSeconds = appState.remainingSeconds;
+    isRunning = appState.isTimerRunning;
+
+    if (isRunning && remainingSeconds > 0) {
+      _pulseController.repeat(reverse: true);
+      _startPeriodicTicker();
+    }
+
+    _hydratedFromState = true;
   }
 
-  void startTimer() {
-    if (isRunning) return;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
 
-    setState(() {
-      isRunning = true;
-    });
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      if (isRunning) {
+        context.read<BloomAppState>().tickTimerState(remainingSeconds);
+      }
+    }
 
-    _pulseController.repeat(reverse: true);
+    if (state == AppLifecycleState.resumed) {
+      final appState = context.read<BloomAppState>();
 
-    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() {
+        selectedMode = appState.selectedFocusMode;
+        remainingSeconds = appState.remainingSeconds;
+        isRunning = appState.isTimerRunning;
+      });
+
+      timer?.cancel();
+
+      if (isRunning && remainingSeconds > 0) {
+        _pulseController.repeat(reverse: true);
+        _startPeriodicTicker();
+      } else {
+        _pulseController.stop();
+        _pulseController.reset();
+
+        if (remainingSeconds <= 0) {
+          _handleTimerCompleteAfterResume();
+        }
+      }
+    }
+  }
+
+  void _startPeriodicTicker() {
+    timer?.cancel();
+
+    timer = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (!mounted) return;
 
       if (remainingSeconds > 0) {
         setState(() {
           remainingSeconds--;
         });
+
+        await context.read<BloomAppState>().tickTimerState(remainingSeconds);
       } else {
-        timer?.cancel();
-
-        setState(() {
-          isRunning = false;
-
-          if (selectedMode == 0) {
-            AppState.water += 10;
-            AppState.plantHeight += 0.2;
-            AppState.completedSessions += 1;
-          }
-        });
-
-        _pulseController.stop();
-        _pulseController.reset();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: AppTheme.darkGreen,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            content: Text(
-              selectedMode == 0
-                  ? "Focus session complete! +10 water, plant grew +0.2m 🌱"
-                  : "Break complete! Ready for your next focus session 💚",
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        );
-
-        if (selectedMode == 0) {
-          setState(() {
-            selectedMode =
-                AppState.completedSessions % 4 == 0 ? 2 : 1; // long or short
-            remainingSeconds = currentModeMinutes * 60;
-          });
-        } else {
-          setState(() {
-            selectedMode = 0;
-            remainingSeconds = currentModeMinutes * 60;
-          });
-        }
+        await _handleTimerFinished();
       }
     });
   }
 
-  void pauseTimer() {
+  Future<void> applySelectedMode() async {
+    final appState = context.read<BloomAppState>();
+
     timer?.cancel();
+    _pulseController.stop();
+    _pulseController.reset();
+
+    await appState.setSelectedFocusMode(selectedMode);
+
+    setState(() {
+      isRunning = false;
+      remainingSeconds = appState.remainingSeconds;
+    });
+  }
+
+  Future<void> startTimer() async {
+    if (isRunning) return;
+
+    await context.read<BloomAppState>().startTimerState();
+
+    setState(() {
+      isRunning = true;
+    });
+
+    _pulseController.repeat(reverse: true);
+    _startPeriodicTicker();
+  }
+
+  Future<void> _handleTimerFinished() async {
+    timer?.cancel();
+
+    final previousMode = selectedMode;
+    final appState = context.read<BloomAppState>();
+
+    final newlyUnlocked = await appState.completeCurrentModeAndAdvance();
+
+    if (!mounted) return;
+
+    setState(() {
+      isRunning = false;
+      selectedMode = appState.selectedFocusMode;
+      remainingSeconds = appState.remainingSeconds;
+    });
+
+    _pulseController.stop();
+    _pulseController.reset();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppTheme.darkGreen,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        content: Text(
+          previousMode == 0
+              ? "Focus session complete! +10 water earned 🌱"
+              : "Break complete! Ready for your next focus session 💚",
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+
+    _showAchievementSnackbars(newlyUnlocked);
+  }
+
+  Future<void> _handleTimerCompleteAfterResume() async {
+    final appState = context.read<BloomAppState>();
+
+    if (appState.isTimerRunning || appState.remainingSeconds > 0) return;
+
+    final previousMode = selectedMode;
+    final newlyUnlocked = await appState.completeCurrentModeAndAdvance();
+
+    if (!mounted) return;
+
+    setState(() {
+      isRunning = false;
+      selectedMode = appState.selectedFocusMode;
+      remainingSeconds = appState.remainingSeconds;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppTheme.darkGreen,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        content: Text(
+          previousMode == 0
+              ? "Focus session complete! +10 water earned 🌱"
+              : "Break complete! Ready for your next focus session 💚",
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+
+    _showAchievementSnackbars(newlyUnlocked);
+  }
+
+  void _showAchievementSnackbars(List<String> ids) {
+    for (final id in ids) {
+      final title = _achievementTitle(id);
+      if (title == null) continue;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF3E7A57),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          content: Text(
+            '🏆 Achievement unlocked: $title',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  String? _achievementTitle(String id) {
+    switch (id) {
+      case 'first_session':
+        return 'First Session';
+      case 'week_warrior':
+        return 'Week Warrior';
+      case 'focus_builder':
+        return 'Focus Builder';
+      case 'century_club':
+        return 'Century Club';
+      case 'deep_focus':
+        return 'Deep Focus';
+      case 'zen_master':
+        return 'Zen Master';
+      case 'first_pour':
+        return 'First Pour';
+      case 'green_thumb':
+        return 'Green Thumb';
+      case 'blooming_soul':
+        return 'Blooming Soul';
+      case 'full_bloom':
+        return 'Full Bloom';
+      case 'water_master':
+        return 'Water Master';
+      default:
+        return null;
+    }
+  }
+
+  Future<void> pauseTimer() async {
+    timer?.cancel();
+
+    await context.read<BloomAppState>().pauseTimerState(remainingSeconds);
+
     setState(() {
       isRunning = false;
     });
+
     _pulseController.stop();
   }
 
-  void resetTimer() {
+  Future<void> resetTimer() async {
+    final appState = context.read<BloomAppState>();
+
     timer?.cancel();
+    await appState.resetTimerState();
+
     setState(() {
-      remainingSeconds = currentModeMinutes * 60;
+      selectedMode = appState.selectedFocusMode;
+      remainingSeconds = appState.remainingSeconds;
       isRunning = false;
     });
+
     _pulseController.stop();
     _pulseController.reset();
   }
@@ -232,6 +403,7 @@ class _FocusPageState extends State<FocusPage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
     _pulseController.dispose();
     _entryController.dispose();
@@ -241,6 +413,7 @@ class _FocusPageState extends State<FocusPage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final appState = context.watch<BloomAppState>();
 
     return SafeArea(
       child: FadeTransition(
@@ -255,11 +428,11 @@ class _FocusPageState extends State<FocusPage>
               children: [
                 _buildHeader(theme),
                 const SizedBox(height: 22),
-                _buildStatsRow(),
+                _buildStatsRow(appState),
                 const SizedBox(height: 26),
                 _buildModeSelector(),
                 const SizedBox(height: 34),
-                Center(child: _buildTimer(theme)),
+                Center(child: _buildTimer(theme, appState)),
                 const SizedBox(height: 26),
                 _buildMotivationText(theme),
                 const SizedBox(height: 28),
@@ -306,7 +479,12 @@ class _FocusPageState extends State<FocusPage>
                 builder: (_) => const SettingsPage(),
               ),
             ).then((_) {
-              applySelectedMode();
+              final appState = context.read<BloomAppState>();
+              setState(() {
+                selectedMode = appState.selectedFocusMode;
+                remainingSeconds = appState.remainingSeconds;
+                isRunning = appState.isTimerRunning;
+              });
             });
           },
           child: Container(
@@ -334,14 +512,14 @@ class _FocusPageState extends State<FocusPage>
     );
   }
 
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(BloomAppState appState) {
     return Row(
       children: [
         Expanded(
           child: _StatCard(
             icon: Icons.bolt_rounded,
             title: "Focus",
-            value: "${AppState.focusMinutes}m",
+            value: "${appState.focusMinutes}m",
             iconColor: const Color(0xFF7FA88E),
           ),
         ),
@@ -350,7 +528,7 @@ class _FocusPageState extends State<FocusPage>
           child: _StatCard(
             icon: Icons.water_drop_rounded,
             title: "Water",
-            value: "${AppState.water}ml",
+            value: "${appState.availableWaterMl}ml",
             iconColor: const Color(0xFF63A9D8),
           ),
         ),
@@ -359,7 +537,7 @@ class _FocusPageState extends State<FocusPage>
           child: _StatCard(
             icon: Icons.local_fire_department_rounded,
             title: "Streak",
-            value: "${AppState.completedSessions}d 🔥",
+            value: "${appState.currentStreakDays}d 🔥",
             iconColor: const Color(0xFFF09A5A),
           ),
         ),
@@ -382,11 +560,11 @@ class _FocusPageState extends State<FocusPage>
 
           return Expanded(
             child: GestureDetector(
-              onTap: () {
+              onTap: () async {
                 setState(() {
                   selectedMode = index;
                 });
-                applySelectedMode();
+                await applySelectedMode();
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
@@ -424,7 +602,7 @@ class _FocusPageState extends State<FocusPage>
     );
   }
 
-  Widget _buildTimer(ThemeData theme) {
+  Widget _buildTimer(ThemeData theme, BloomAppState appState) {
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
@@ -437,7 +615,7 @@ class _FocusPageState extends State<FocusPage>
               alignment: Alignment.center,
               children: [
                 TweenAnimationBuilder<double>(
-                  tween: Tween<double>(begin: 0, end: progress),
+                  tween: Tween<double>(begin: 0, end: _progress(appState)),
                   duration: const Duration(milliseconds: 500),
                   curve: Curves.easeInOut,
                   builder: (context, value, _) {
@@ -508,7 +686,7 @@ class _FocusPageState extends State<FocusPage>
                       const SizedBox(height: 10),
                       Text(
                         selectedMode == 0
-                            ? "Session ${AppState.completedSessions + 1}"
+                            ? "Session ${appState.completedSessions + 1}"
                             : selectedMode == 1
                                 ? "Quick reset"
                                 : "Deep reset",
@@ -567,7 +745,9 @@ class _FocusPageState extends State<FocusPage>
             ],
           ),
           child: IconButton(
-            onPressed: resetTimer,
+            onPressed: () async {
+              await resetTimer();
+            },
             icon: const Icon(Icons.refresh_rounded),
             color: AppTheme.primary.withValues(alpha: 0.85),
             iconSize: 26,
@@ -591,7 +771,13 @@ class _FocusPageState extends State<FocusPage>
             ],
           ),
           child: ElevatedButton(
-            onPressed: isRunning ? pauseTimer : startTimer,
+            onPressed: () async {
+              if (isRunning) {
+                await pauseTimer();
+              } else {
+                await startTimer();
+              }
+            },
             style: ElevatedButton.styleFrom(
               elevation: 0,
               backgroundColor:

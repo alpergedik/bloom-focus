@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/state/app_state.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -20,14 +21,13 @@ class _SettingsPageState extends State<SettingsPage> {
     final newValue = increase ? currentValue + 1 : currentValue - 1;
     if (newValue < min || newValue > max) return;
 
-    setState(() {
-      onChanged(newValue);
-    });
+    onChanged(newValue);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final appState = context.watch<BloomAppState>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFEAF3EA),
@@ -94,17 +94,23 @@ class _SettingsPageState extends State<SettingsPage> {
                       iconColor: const Color(0xFF77B77A),
                       title: "Focus Session",
                       subtitle: "Deep work interval",
-                      value: AppState.focusMinutes,
+                      value: appState.focusMinutes,
                       onMinus: () => _changeMinutes(
-                        currentValue: AppState.focusMinutes,
-                        onChanged: (value) => AppState.focusMinutes = value,
+                        currentValue: appState.focusMinutes,
+                        onChanged: (value) =>
+                            context.read<BloomAppState>().updateFocusMinutes(
+                                  focus: value,
+                                ),
                         min: 5,
                         max: 120,
                         increase: false,
                       ),
                       onPlus: () => _changeMinutes(
-                        currentValue: AppState.focusMinutes,
-                        onChanged: (value) => AppState.focusMinutes = value,
+                        currentValue: appState.focusMinutes,
+                        onChanged: (value) =>
+                            context.read<BloomAppState>().updateFocusMinutes(
+                                  focus: value,
+                                ),
                         min: 5,
                         max: 120,
                         increase: true,
@@ -116,19 +122,23 @@ class _SettingsPageState extends State<SettingsPage> {
                       iconColor: const Color(0xFF77B77A),
                       title: "Short Break",
                       subtitle: "Quick rest period",
-                      value: AppState.shortBreakMinutes,
+                      value: appState.shortBreakMinutes,
                       onMinus: () => _changeMinutes(
-                        currentValue: AppState.shortBreakMinutes,
+                        currentValue: appState.shortBreakMinutes,
                         onChanged: (value) =>
-                            AppState.shortBreakMinutes = value,
+                            context.read<BloomAppState>().updateFocusMinutes(
+                                  shortBreak: value,
+                                ),
                         min: 1,
                         max: 30,
                         increase: false,
                       ),
                       onPlus: () => _changeMinutes(
-                        currentValue: AppState.shortBreakMinutes,
+                        currentValue: appState.shortBreakMinutes,
                         onChanged: (value) =>
-                            AppState.shortBreakMinutes = value,
+                            context.read<BloomAppState>().updateFocusMinutes(
+                                  shortBreak: value,
+                                ),
                         min: 1,
                         max: 30,
                         increase: true,
@@ -140,17 +150,23 @@ class _SettingsPageState extends State<SettingsPage> {
                       iconColor: const Color(0xFF77B77A),
                       title: "Long Break",
                       subtitle: "After 4 sessions",
-                      value: AppState.longBreakMinutes,
+                      value: appState.longBreakMinutes,
                       onMinus: () => _changeMinutes(
-                        currentValue: AppState.longBreakMinutes,
-                        onChanged: (value) => AppState.longBreakMinutes = value,
+                        currentValue: appState.longBreakMinutes,
+                        onChanged: (value) =>
+                            context.read<BloomAppState>().updateFocusMinutes(
+                                  longBreak: value,
+                                ),
                         min: 5,
                         max: 60,
                         increase: false,
                       ),
                       onPlus: () => _changeMinutes(
-                        currentValue: AppState.longBreakMinutes,
-                        onChanged: (value) => AppState.longBreakMinutes = value,
+                        currentValue: appState.longBreakMinutes,
+                        onChanged: (value) =>
+                            context.read<BloomAppState>().updateFocusMinutes(
+                                  longBreak: value,
+                                ),
                         min: 5,
                         max: 60,
                         increase: true,
@@ -170,11 +186,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       iconColor: const Color(0xFFF29B63),
                       title: "Notifications",
                       subtitle: "Session reminders",
-                      value: AppState.notificationsEnabled,
+                      value: appState.notificationsEnabled,
                       onChanged: (value) {
-                        setState(() {
-                          AppState.notificationsEnabled = value;
-                        });
+                        context
+                            .read<BloomAppState>()
+                            .setNotificationsEnabled(value);
                       },
                     ),
                     const _TileDivider(),
@@ -183,11 +199,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       iconColor: const Color(0xFF61AFE8),
                       title: "Sound Effects",
                       subtitle: "UI feedback sounds",
-                      value: AppState.soundEffectsEnabled,
+                      value: appState.soundEffectsEnabled,
                       onChanged: (value) {
-                        setState(() {
-                          AppState.soundEffectsEnabled = value;
-                        });
+                        context
+                            .read<BloomAppState>()
+                            .setSoundEffectsEnabled(value);
                       },
                     ),
                     const _TileDivider(),
@@ -196,11 +212,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       iconColor: const Color(0xFFB58ADF),
                       title: "Dark Mode",
                       subtitle: "Easy on the eyes",
-                      value: AppState.darkModeEnabled,
+                      value: appState.darkModeEnabled,
                       onChanged: (value) {
-                        setState(() {
-                          AppState.darkModeEnabled = value;
-                        });
+                        context.read<BloomAppState>().setDarkModeEnabled(value);
                       },
                     ),
                   ],

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../core/state/app_state.dart';
 import '../../../core/theme/app_theme.dart';
 
 class TasksPage extends StatefulWidget {
@@ -13,51 +15,12 @@ class _TasksPageState extends State<TasksPage>
   late DateTime _today;
   late DateTime _selectedDate;
 
-  final Map<String, List<PlanTask>> _tasksByDate = {};
-
   @override
   void initState() {
     super.initState();
     _today = DateTime.now();
     _selectedDate = DateTime(_today.year, _today.month, _today.day);
-    _seedInitialTasks();
   }
-
-  void _seedInitialTasks() {
-    final key = _dateKey(_selectedDate);
-
-    if (_tasksByDate.containsKey(key)) return;
-
-    _tasksByDate[key] = [
-      PlanTask(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
-        title: 'Deep work session',
-        time: const TimeOfDay(hour: 9, minute: 0),
-        category: TaskCategory.work,
-      ),
-      PlanTask(
-        id: (DateTime.now().microsecondsSinceEpoch + 1).toString(),
-        title: 'Read 30 pages',
-        time: const TimeOfDay(hour: 11, minute: 0),
-        category: TaskCategory.study,
-        isCompleted: true,
-      ),
-      PlanTask(
-        id: (DateTime.now().microsecondsSinceEpoch + 2).toString(),
-        title: 'Review quarterly goals',
-        time: const TimeOfDay(hour: 14, minute: 0),
-        category: TaskCategory.work,
-      ),
-      PlanTask(
-        id: (DateTime.now().microsecondsSinceEpoch + 3).toString(),
-        title: 'Evening meditation',
-        time: const TimeOfDay(hour: 18, minute: 0),
-        category: TaskCategory.health,
-      ),
-    ];
-  }
-
-  String _dateKey(DateTime date) => '${date.year}-${date.month}-${date.day}';
 
   List<DateTime> get _weekDays {
     final weekday = _today.weekday;
@@ -68,22 +31,17 @@ class _TasksPageState extends State<TasksPage>
     );
   }
 
-  List<PlanTask> get _selectedTasks {
-    final tasks = List<PlanTask>.from(_tasksByDate[_dateKey(_selectedDate)] ?? []);
-    tasks.sort((a, b) {
-      final aMinutes = a.time.hour * 60 + a.time.minute;
-      final bMinutes = b.time.hour * 60 + b.time.minute;
-      return aMinutes.compareTo(bMinutes);
-    });
-    return tasks;
+  List<PlanTask> _selectedTasks(BloomAppState appState) {
+    return appState.tasksForDate(_selectedDate);
   }
 
-  int get _completedCount =>
-      _selectedTasks.where((task) => task.isCompleted).length;
+  int _completedCount(BloomAppState appState) =>
+      _selectedTasks(appState).where((task) => task.isCompleted).length;
 
-  int get _completionPercent {
-    if (_selectedTasks.isEmpty) return 0;
-    return ((_completedCount / _selectedTasks.length) * 100).round();
+  int _completionPercent(BloomAppState appState) {
+    final tasks = _selectedTasks(appState);
+    if (tasks.isEmpty) return 0;
+    return ((_completedCount(appState) / tasks.length) * 100).round();
   }
 
   Future<void> _openAddTaskSheet() async {
@@ -291,24 +249,20 @@ class _TasksPageState extends State<TasksPage>
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: () {
+                          onPressed: () async {
                             final trimmed = title.trim();
                             if (trimmed.isEmpty) return;
 
-                            final key = _dateKey(selectedDate);
-
-                            setState(() {
-                              _tasksByDate.putIfAbsent(key, () => []);
-                              _tasksByDate[key]!.add(
-                                PlanTask(
-                                  id: DateTime.now()
-                                      .microsecondsSinceEpoch
-                                      .toString(),
+                            await context.read<BloomAppState>().addTask(
+                                  date: selectedDate,
                                   title: trimmed,
                                   time: selectedTime,
                                   category: selectedCategory,
-                                ),
-                              );
+                                );
+
+                            if (!mounted) return;
+
+                            setState(() {
                               _selectedDate = selectedDate;
                             });
 
@@ -347,7 +301,8 @@ class _TasksPageState extends State<TasksPage>
     final controller = TextEditingController(text: task.title);
     TimeOfDay selectedTime = task.time;
     TaskCategory selectedCategory = task.category;
-    DateTime selectedDate = _findTaskDate(task.id) ?? _selectedDate;
+    DateTime selectedDate =
+        context.read<BloomAppState>().findTaskDate(task.id) ?? _selectedDate;
     bool isCompleted = task.isCompleted;
 
     await showModalBottomSheet(
@@ -603,20 +558,30 @@ class _TasksPageState extends State<TasksPage>
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: () {
+                              onPressed: () async {
                                 final trimmed = controller.text.trim();
                                 if (trimmed.isEmpty) return;
 
-                                _updateTask(
-                                  oldTaskId: task.id,
-                                  updatedTask: task.copyWith(
-                                    title: trimmed,
-                                    time: selectedTime,
-                                    category: selectedCategory,
-                                    isCompleted: isCompleted,
-                                  ),
-                                  newDate: selectedDate,
-                                );
+                                await context.read<BloomAppState>().updateTask(
+                                      oldTaskId: task.id,
+                                      updatedTask: task.copyWith(
+                                        title: trimmed,
+                                        time: selectedTime,
+                                        category: selectedCategory,
+                                        isCompleted: isCompleted,
+                                      ),
+                                      newDate: selectedDate,
+                                    );
+
+                                if (!mounted) return;
+
+                                setState(() {
+                                  _selectedDate = DateTime(
+                                    selectedDate.year,
+                                    selectedDate.month,
+                                    selectedDate.day,
+                                  );
+                                });
 
                                 Navigator.pop(context);
                               },
@@ -649,80 +614,24 @@ class _TasksPageState extends State<TasksPage>
         );
       },
     );
-
   }
 
-  DateTime? _findTaskDate(String taskId) {
-    for (final entry in _tasksByDate.entries) {
-      for (final task in entry.value) {
-        if (task.id == taskId) {
-          final parts = entry.key.split('-');
-          return DateTime(
-            int.parse(parts[0]),
-            int.parse(parts[1]),
-            int.parse(parts[2]),
-          );
-        }
-      }
-    }
-    return null;
-  }
-
-  void _updateTask({
-    required String oldTaskId,
-    required PlanTask updatedTask,
-    required DateTime newDate,
-  }) {
-    setState(() {
-      String? oldKey;
-
-      for (final entry in _tasksByDate.entries) {
-        final index = entry.value.indexWhere((task) => task.id == oldTaskId);
-        if (index != -1) {
-          oldKey = entry.key;
-          entry.value.removeAt(index);
-          break;
-        }
-      }
-
-      final newKey = _dateKey(newDate);
-      _tasksByDate.putIfAbsent(newKey, () => []);
-      _tasksByDate[newKey]!.add(updatedTask);
-
-      if (oldKey != null && _tasksByDate[oldKey]!.isEmpty) {
-        _tasksByDate.remove(oldKey);
-      }
-
-      _selectedDate = DateTime(newDate.year, newDate.month, newDate.day);
-    });
-  }
-
-  void _toggleTask(String id) {
-    setState(() {
-      final tasks = _tasksByDate[_dateKey(_selectedDate)] ?? [];
-      final index = tasks.indexWhere((task) => task.id == id);
-      if (index != -1) {
-        tasks[index] = tasks[index].copyWith(
-          isCompleted: !tasks[index].isCompleted,
+  Future<void> _toggleTask(String id) async {
+    await context.read<BloomAppState>().toggleTask(
+          date: _selectedDate,
+          taskId: id,
         );
-      }
-    });
   }
 
-  void _deleteTask(String id) {
-    PlanTask? removedTask;
-    final key = _dateKey(_selectedDate);
+  Future<void> _deleteTask(String id) async {
+    final removedTask = await context.read<BloomAppState>().deleteTask(
+          date: _selectedDate,
+          taskId: id,
+        );
 
-    setState(() {
-      final tasks = _tasksByDate[key] ?? [];
-      final index = tasks.indexWhere((task) => task.id == id);
-      if (index != -1) {
-        removedTask = tasks[index];
-        tasks.removeAt(index);
-      }
-    });
+    if (removedTask != null && mounted) {
+      final restoreDate = _selectedDate;
 
-    if (removedTask != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
@@ -735,10 +644,10 @@ class _TasksPageState extends State<TasksPage>
             label: 'Undo',
             textColor: Colors.white,
             onPressed: () {
-              setState(() {
-                _tasksByDate.putIfAbsent(key, () => []);
-                _tasksByDate[key]!.add(removedTask!);
-              });
+              context.read<BloomAppState>().restoreTask(
+                    date: restoreDate,
+                    task: removedTask,
+                  );
             },
           ),
         ),
@@ -749,6 +658,10 @@ class _TasksPageState extends State<TasksPage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final appState = context.watch<BloomAppState>();
+    final selectedTasks = _selectedTasks(appState);
+    final completedCount = _completedCount(appState);
+    final completionPercent = _completionPercent(appState);
 
     return Scaffold(
       backgroundColor: const Color(0xFFEAF3EA),
@@ -786,18 +699,22 @@ class _TasksPageState extends State<TasksPage>
                   const SizedBox(height: 22),
                   _buildWeekSelector(),
                   const SizedBox(height: 22),
-                  _buildDaySummary(),
+                  _buildDaySummary(
+                    selectedTasks: selectedTasks,
+                    completedCount: completedCount,
+                    completionPercent: completionPercent,
+                  ),
                   const SizedBox(height: 16),
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 250),
-                    child: _selectedTasks.isEmpty
+                    child: selectedTasks.isEmpty
                         ? _EmptyTasksCard(
-                            key: ValueKey(_dateKey(_selectedDate)),
+                            key: ValueKey(context.read<BloomAppState>().dateKey(_selectedDate)),
                             onAddTask: _openAddTaskSheet,
                           )
                         : Column(
-                            key: ValueKey(_dateKey(_selectedDate)),
-                            children: _selectedTasks
+                            key: ValueKey(context.read<BloomAppState>().dateKey(_selectedDate)),
+                            children: selectedTasks
                                 .map(
                                   (task) => Padding(
                                     padding: const EdgeInsets.only(bottom: 14),
@@ -921,7 +838,11 @@ class _TasksPageState extends State<TasksPage>
     );
   }
 
-  Widget _buildDaySummary() {
+  Widget _buildDaySummary({
+    required List<PlanTask> selectedTasks,
+    required int completedCount,
+    required int completionPercent,
+  }) {
     return Row(
       children: [
         Expanded(
@@ -938,7 +859,7 @@ class _TasksPageState extends State<TasksPage>
               ),
               const SizedBox(height: 4),
               Text(
-                '$_completedCount/${_selectedTasks.length} tasks completed',
+                '$completedCount/${selectedTasks.length} tasks completed',
                 style: TextStyle(
                   fontSize: 14,
                   color: AppTheme.primary.withValues(alpha: 0.78),
@@ -955,7 +876,7 @@ class _TasksPageState extends State<TasksPage>
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
-            '$_completionPercent% done',
+            '$completionPercent% done',
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w800,
@@ -1305,86 +1226,4 @@ class _EmptyTasksCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class PlanTask {
-  final String id;
-  final String title;
-  final TimeOfDay time;
-  final TaskCategory category;
-  final bool isCompleted;
-
-  const PlanTask({
-    required this.id,
-    required this.title,
-    required this.time,
-    required this.category,
-    this.isCompleted = false,
-  });
-
-  PlanTask copyWith({
-    String? id,
-    String? title,
-    TimeOfDay? time,
-    TaskCategory? category,
-    bool? isCompleted,
-  }) {
-    return PlanTask(
-      id: id ?? this.id,
-      title: title ?? this.title,
-      time: time ?? this.time,
-      category: category ?? this.category,
-      isCompleted: isCompleted ?? this.isCompleted,
-    );
-  }
-}
-
-enum TaskCategory {
-  work,
-  study,
-  health,
-  personal,
-}
-
-extension TaskCategoryX on TaskCategory {
-  TaskCategoryStyle get style {
-    switch (this) {
-      case TaskCategory.work:
-        return const TaskCategoryStyle(
-          label: 'Work',
-          icon: Icons.work_outline_rounded,
-          color: Color(0xFF8AAE93),
-        );
-      case TaskCategory.study:
-        return const TaskCategoryStyle(
-          label: 'Study',
-          icon: Icons.menu_book_rounded,
-          color: Color(0xFF8BC3E8),
-        );
-      case TaskCategory.health:
-        return const TaskCategoryStyle(
-          label: 'Health',
-          icon: Icons.favorite_border_rounded,
-          color: Color(0xFFF19393),
-        );
-      case TaskCategory.personal:
-        return const TaskCategoryStyle(
-          label: 'Personal',
-          icon: Icons.self_improvement_rounded,
-          color: Color(0xFFB69ADF),
-        );
-    }
-  }
-}
-
-class TaskCategoryStyle {
-  final String label;
-  final IconData icon;
-  final Color color;
-
-  const TaskCategoryStyle({
-    required this.label,
-    required this.icon,
-    required this.color,
-  });
 }
